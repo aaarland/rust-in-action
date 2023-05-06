@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+    "mandlebrot",
+    "grep_lite"
+    ]
