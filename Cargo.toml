@@ -2,5 +2,6 @@
 
 members = [
     "mandlebrot",
-    "grep_lite"
+    "grep_lite",
+    "cpu",
     ]
