@@ -121,6 +121,7 @@ impl World {
 }
 
 fn main() {
+    dbg!("Starting");
     let (width, height) = (1280.0, 960.0);
     let mut window: PistonWindow = WindowSettings::new("particles", [width, height])
         .exit_on_esc(true)

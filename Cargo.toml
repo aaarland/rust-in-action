@@ -1,3 +1,3 @@
 [workspace]
 resolver = "2"
-members = ["mandlebrot", "grep_lite", "cpu", "particles"]
+members = ["mandlebrot", "grep_lite", "cpu", "particles", "fview", "actionkv"]
