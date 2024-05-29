@@ -12,7 +12,6 @@ use crc::crc32;
 use serde::{Deserialize, Serialize};
 
 type ByteString = Vec<u8>;
-
 type ByteStr = [u8];
 
 #[derive(Debug, Serialize, Deserialize)]
