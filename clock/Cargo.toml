@@ -6,4 +6,8 @@ authors = ["Adrian Aarland"]
 
 [dependencies]
 chrono = "0.4"
+clap = "2"
+
+[target.'cfg(not(windows))'.dependencies]
+libc = "0.2"
 
