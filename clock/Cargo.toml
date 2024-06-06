@@ -1,0 +1,9 @@
+[package]
+name = "clock"
+version = "0.1.0"
+edition = "2021"
+authors = ["Adrian Aarland"]
+
+[dependencies]
+chrono = "0.4"
+
