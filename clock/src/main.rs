@@ -1,3 +1,10 @@
+#[cfg(windows)]
+use kernel32;
+#[cfg(not(windows))]
+use libc;
+#[cfg(windows)]
+use winapi;
+
 use chrono::TimeZone;
 use chrono::{DateTime, Local};
 use clap::{App, Arg};
@@ -7,6 +14,49 @@ struct Clock;
 impl Clock {
     fn get() -> DateTime<Local> {
         Local::now()
+    }
+
+    #[cfg(windows)]
+    fn set<Tz: TimeZone>(t: DateTime<Tz>) -> () {
+        use std::mem::zeroed;
+
+        use chrono::Weekday;
+        use kernel32::SetSystemTime;
+        use winapi::{SYSTEMTIME, WORD};
+
+        let t = t.with_timezone(&Local);
+
+        let mut systime: SYSTEMTIME = unsafe { zeroed() };
+
+        let dow = match t.weekday() {
+            Weekday::Mon => 1,
+            Weekday::Tue => 2,
+            Weekday::Wed => 3,
+            Weekday::Thu => 4,
+            Weekday::Fri => 5,
+            Weekday::Sat => 6,
+            Weekday::Sun => 0,
+        };
+
+        let mut ns = t.nanoseconds();
+        let is_leap_second = ns > 1_000_000_000;
+        if (is_leap_second) {
+            ns -= 1_000_000_000;
+        }
+
+        systime.wYear = t.year() as WORD;
+        systime.wMonth = t.month() as WORD;
+        systime.wDayOfWeek = dow as WORD;
+        systime.wDay = t.day() as WORD;
+        systime.wMinute = t.minute() as WORD;
+        systime.wSecond = t.second() as WORD;
+        systime.wMilliseconds = (ns / 1_000_000) as WORD;
+
+        let systime_ptr = &systime as *const SYSTEMTIME;
+
+        unsafe {
+            SetSystemTime(systime_ptr);
+        }
     }
 
     #[cfg(not(windows))]
@@ -58,7 +108,18 @@ fn main() {
     let std = args.value_of("std").unwrap();
 
     if action == "set" {
-        todo!();
+        let t_ = args.value_of("datetime").unwrap();
+
+        let parser = match std {
+            "rfc2822" => DateTime::parse_from_rfc2822,
+            "rfc3339" => DateTime::parse_from_rfc3339,
+            _ => unreachable!(),
+        };
+
+        let err_msg = format!("Unabled to parse {} according to {}", t_, std);
+
+        let t = parser(t_).expect(&err_msg);
+        Clock::set(t)
     }
     let now = Clock::get();
 
