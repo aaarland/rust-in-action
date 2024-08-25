@@ -7,6 +7,7 @@ authors = ["Adrian Aarland"]
 [dependencies]
 chrono = "0.4"
 clap = "2"
+byteorder = "1.2"
 
 [target.'cfg(windows)'.dependencies]
 winapi = "0.2"
