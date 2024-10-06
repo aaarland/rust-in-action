@@ -1,8 +1,13 @@
-use std::env;
+use std::{env, thread};
 
+use crossbeam::unbounded;
+use rand::Rng;
 use svg::node::element::path::{Command, Data, Position};
+use svg::node::element::tag::Ellipse;
 use svg::node::element::{Path, Rectangle};
 use svg::Document;
+
+use rayon::prelude::*;
 
 use crate::Operation::{Forward, Home, Noop, TurnLeft, TurnRight};
 
@@ -30,7 +35,7 @@ enum Operation {
     TurnLeft,
     TurnRight,
     Home,
-    Noop(usize),
+    Noop(u8),
 }
 
 #[derive(Debug)]
@@ -99,22 +104,77 @@ impl Artist {
     }
 }
 
-fn parse(input: &str) -> Vec<Operation> {
-    let mut steps = Vec::new();
-    for byte in input.bytes() {
-        let step = match byte {
-            b'0' => Home,
-            b'1'..=b'9' => {
-                let distance = (byte - 0x30) as isize;
-                Forward(distance * (HEIGHT / 10))
-            }
-            b'a' | b'b' | b'c' => TurnLeft,
-            b'd' | b'e' | b'f' => TurnLeft,
-            _ => Noop(byte.into()),
-        };
-        steps.push(step)
+fn parse_byte(byte: u8) -> Operation {
+    match byte {
+        b'0' => Home,
+        b'1'..=b'9' => {
+            let distance = (byte - 0x30) as isize;
+            Forward(distance * (HEIGHT / 10))
+        }
+        b'a' | b'b' | b'c' => TurnLeft,
+        b'd' | b'e' | b'f' => TurnLeft,
+        _ => Noop(byte),
     }
-    steps
+}
+
+enum Work {
+    Task((usize, u8)),
+    Finished,
+}
+
+fn parse_channels(input: &str) -> Vec<Operation> {
+    let n_threads = 2;
+    let (todo_tx, todo_rx) = unbounded();
+    let (results_tx, results_rx) = unbounded();
+
+    let mut n_bytes = 0;
+    for (i, byte) in input.bytes().enumerate() {
+        todo_tx.send(Work::Task((i,byte))).unwrap();
+        n_bytes += 1;
+    }
+
+    for _ in 0..n_threads {
+        todo_tx.send(Work::Finished).unwrap();
+    }
+
+    for _ in 0..n_threads {
+        let todo = todo_rx.clone();
+        let results = results_tx.clone();
+        thread::spawn(move || {
+            loop {
+                let task = todo.recv();
+                let result = match task {
+                    Err(_) => break,
+                    Ok(Work::Finished) => break,
+                    Ok(Work::Task((i, byte))) => (i, parse_byte(byte)),
+                };
+                results.send(result).unwrap();
+            }
+        });
+    }
+    let mut ops = vec![Noop(0); n_bytes];
+    for _ in 0..n_bytes {
+        let (i, op) = results_rx.recv().unwrap();
+        ops[i] = op;
+    }
+    ops
+}
+
+fn parse_rayon(input: &str) -> Vec<Operation> {
+    input
+        .as_bytes()
+        .par_iter()
+        .map(|byte| parse_byte(*byte))
+        .collect()
+}
+
+fn parse(input: &str) -> Vec<Operation> {
+    let mut rng = rand::thread_rng();
+    if rng.gen_bool(0.5) {
+        parse_rayon(input)
+    } else {
+        parse_channels(input)
+    }
 }
 
 fn convert(operations: &Vec<Operation>) -> Vec<Command> {
@@ -131,7 +191,7 @@ fn convert(operations: &Vec<Operation>) -> Vec<Command> {
             Home => turtle.home(),
             Noop(byte) => {
                 eprintln!("WARNING: illegal byte encountered: {:?}", byte);
-            },
+            }
         };
         let path_segment = Command::Line(Position::Absolute, (turtle.x, turtle.y).into());
 
@@ -153,7 +213,7 @@ fn generate_svg(path_data: Vec<Command>) -> Document {
         .clone()
         .set("fill-opacity", "0.0")
         .set("stroke", "#cccccc")
-        .set("stroke-width", 3*STROKE_WIDTH);
+        .set("stroke-width", 3 * STROKE_WIDTH);
 
     let sketch = Path::new()
         .set("fill", "none")
@@ -163,7 +223,7 @@ fn generate_svg(path_data: Vec<Command>) -> Document {
         .set("d", Data::from(path_data));
 
     let document = Document::new()
-        .set("viewBox", (0,0,HEIGHT,WIDTH))
+        .set("viewBox", (0, 0, HEIGHT, WIDTH))
         .set("heigth", HEIGHT)
         .set("width", WIDTH)
         .set("style", "style=\"outline: 5px solid #800000;\"")
